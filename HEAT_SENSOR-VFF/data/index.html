@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Thermal Camera</title>
+  <style>
+    body { background: #111; color: white; font-family: sans-serif; text-align: center; }
+    canvas { border: 2px solid #444; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <h2>ESP32 Thermal Camera</h2>
+  <canvas id="heatmap" width="160" height="160"></canvas>
+
+  <script>
+    const canvas = document.getElementById("heatmap");
+    const ctx = canvas.getContext("2d");
+
+    const socket = new WebSocket(`ws://${location.host}/ws`);
+
+    socket.onmessage = event => {
+      const data = JSON.parse(event.data);
+      draw(data);
+    };
+
+    function draw(data) {
+      for (let y = 0; y < 8; y++) {
+        for (let x = 0; x < 8; x++) {
+          const t = data[y * 8 + x];
+          ctx.fillStyle = getColor(t);
+          ctx.fillRect(x * 20, y * 20, 20, 20);
+        }
+      }
+    }
+
+    function getColor(t) {
+      const min = 20, max = 40;
+      const val = Math.min(Math.max((t - min) / (max - min), 0), 1);
+      const r = Math.floor(255 * val);
+      const b = 255 - r;
+      return `rgb(${r}, 0, ${b})`;
+    }
+  </script>
+</body>
+</html>

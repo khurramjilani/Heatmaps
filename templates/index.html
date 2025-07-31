@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🌡️ Thermal Heatmap Dashboard</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f4f4f4;
+      color: #333;
+      transition: background-color 0.3s, color 0.3s;
+    }
+    .dark-mode {
+      background-color: #121212;
+      color: #eee;
+    }
+    header {
+      background: #6200ea;
+      color: white;
+      padding: 1rem;
+      text-align: center;
+      font-size: 1.5rem;
+    }
+    .controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem;
+      flex-wrap: wrap;
+    }
+    .controls input[type="number"] {
+      width: 100px;
+      padding: 0.3rem;
+    }
+    .btn {
+      padding: 0.5rem 1rem;
+      border: none;
+      background: #03a9f4;
+      color: white;
+      cursor: pointer;
+      border-radius: 5px;
+      margin: 0.5rem;
+    }
+    .btn:hover {
+      background: #0288d1;
+    }
+    .main {
+      display: flex;
+      padding: 1rem;
+      gap: 2rem;
+      flex-wrap: wrap;
+    }
+    #heatmap {
+      border: 2px solid #444;
+    }
+    .legend {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .color-bar {
+      width: 20px;
+      height: 320px;
+      background: linear-gradient(to top, rgb(255,0,0), rgb(0,0,255));
+      border: 1px solid #000;
+      margin-bottom: 5px;
+    }
+    .notifications {
+      display: flex;
+      justify-content: space-around;
+      padding: 1rem;
+      flex-wrap: wrap;
+    }
+    .noti-box {
+      flex: 1;
+      max-width: 48%;
+      background: #fff;
+      padding: 1rem;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    .noti-box.dark-mode {
+      background: #1e1e1e;
+    }
+    .noti-box h3 {
+      border-bottom: 2px solid #ccc;
+      padding-bottom: 0.5rem;
+    }
+    .noti-item {
+      margin: 0.3rem 0;
+      padding: 0.3rem;
+      border-radius: 5px;
+    }
+    .noti-item span {
+      margin-left: 0.5rem;
+    }
+    .noti-fire {
+      background: rgba(255, 87, 34, 0.2);
+      border-left: 4px solid #ff5722;
+    }
+    .noti-human {
+      background: rgba(76, 175, 80, 0.2);
+      border-left: 4px solid #4caf50;
+    }
+    .clock {
+      font-weight: bold;
+    }
+    .chart-container {
+      max-width: 300px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    🌡️ Thermal Heatmap Dashboard
+  </header>
+
+  <div class="controls">
+    <div>
+      <label>Set Temp Threshold: <input type="number" id="threshold" value="40" /> °C</label>
+    </div>
+    <div>
+      <span>Current Max Temp: <strong id="maxTemp">--</strong> °C</span>
+    </div>
+    <div>
+      <span class="clock" id="clock"></span>
+    </div>
+    <div>
+      <button class="btn" onclick="toggleTheme()">🌓 Toggle Theme</button>
+      <button class="btn" onclick="downloadCSV()">⬇️ Download CSV</button>
+    </div>
+  </div>
+
+  <div class="main">
+    <canvas id="heatmap" width="320" height="320"></canvas>
+    <div class="legend">
+      <div class="color-bar"></div>
+      <div>20°C → 45°C</div>
+    </div>
+    <div class="chart-container">
+      <canvas id="tempChart" width="300" height="320"></canvas>
+    </div>
+  </div>
+
+  <div class="notifications">
+    <div class="noti-box" id="fireAlerts">
+      <h3>🔥 Heat Alerts</h3>
+    </div>
+    <div class="noti-box" id="humanAlerts">
+      <h3>👤 Human Detections</h3>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    let maxTemps = [];
+    let dark = false;
+
+    async function fetchData() {
+      const res = await fetch('/data');
+      const data = await res.json();
+      drawHeatmap(data);
+      const max = Math.max(...data.flat());
+      document.getElementById('maxTemp').innerText = max.toFixed(1);
+      logTemp(max);
+      checkAlerts(data, max);
+    }
+
+    function drawHeatmap(grid) {
+      const canvas = document.getElementById('heatmap');
+      const ctx = canvas.getContext('2d');
+      const size = 40;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          const t = grid[r][c];
+          ctx.fillStyle = tempToColor(t);
+          ctx.fillRect(c * size, r * size, size, size);
+        }
+      }
+    }
+
+    function tempToColor(t) {
+      const clamped = Math.min(Math.max(t, 20), 45);
+      const ratio = (clamped - 20) / 25;
+      const r = Math.floor(255 * ratio);
+      const b = Math.floor(255 * (1 - ratio));
+      return `rgb(${r},0,${b})`;
+    }
+
+    function checkAlerts(grid, max) {
+      const threshold = parseFloat(document.getElementById('threshold').value);
+      if (max > threshold) {
+        addNotification('fire', `🔥 High Temp Detected: ${max.toFixed(1)}°C`);
+      }
+
+      const flat = grid.flat();
+      const humanPixels = flat.filter(t => t > 32 && t < 40);
+      if (humanPixels.length >= 5) {
+        addNotification('human', `👤 Human presence detected at ${new Date().toLocaleTimeString()}`);
+      }
+    }
+
+    function addNotification(type, message) {
+      const box = document.getElementById(type === 'fire' ? 'fireAlerts' : 'humanAlerts');
+      const div = document.createElement('div');
+      div.className = `noti-item noti-${type}`;
+      div.innerHTML = `${message} <span>${new Date().toLocaleTimeString()}</span>`;
+      box.insertBefore(div, box.children[1]);
+      if (box.children.length > 11) box.removeChild(box.lastChild);
+    }
+
+    function toggleTheme() {
+      document.body.classList.toggle('dark-mode');
+      document.querySelectorAll('.noti-box').forEach(e => e.classList.toggle('dark-mode'));
+    }
+
+    function updateClock() {
+      const now = new Date();
+      document.getElementById('clock').innerText = now.toLocaleTimeString();
+    }
+
+    function logTemp(t) {
+      if (maxTemps.length >= 20) maxTemps.shift();
+      maxTemps.push(t);
+      updateChart();
+    }
+
+    function downloadCSV() {
+      let csv = 'Time,Max Temperature\n';
+      maxTemps.forEach((t, i) => {
+        csv += `${new Date().toLocaleTimeString()},${t.toFixed(1)}\n`;
+      });
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'temperature_log.csv';
+      a.click();
+    }
+
+    const ctx = document.getElementById('tempChart').getContext('2d');
+    const chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [{
+          label: 'Max Temp',
+          data: [],
+          borderColor: 'red',
+          fill: false
+        }]
+      },
+      options: {
+        responsive: false,
+        animation: false,
+        scales: {
+          y: { beginAtZero: true, suggestedMax: 50 }
+        }
+      }
+    });
+
+    function updateChart() {
+      chart.data.labels = maxTemps.map((_, i) => i + 1);
+      chart.data.datasets[0].data = maxTemps;
+      chart.update();
+    }
+
+    setInterval(fetchData, 1000);
+    setInterval(updateClock, 1000);
+  </script>
+</body>
+</html>
