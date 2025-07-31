@@ -4,8 +4,9 @@
 
  const char* ssid = "Office-2.4G";
  const char* password = "office!786";
-const char* serverUrl = "http://192.168.1.14:5000/update";
-//const char* serverUrl = "http://192.168.1.14:5000/upload";
+ const char* serverUrl = "https://4f128325-6310-4039-b8ce-bd9875fec2c3-00-qb0bd3bkn7o9.sisko.replit.dev/update";
+//const char* serverUrl = "http://192.168.1.14:5000/update";
+//const char* serverUrl = "http://192.168.1.14:5000/upload"; https://4f128325-6310-4039-b8ce-bd9875fec2c3-00-qb0bd3bkn7o9.sisko.replit.dev/
 
 Adafruit_AMG88xx amg;
 
